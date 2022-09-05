@@ -1,13 +1,13 @@
 package gormdialects
 
 import (
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/mysql"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
-// Get MySQL DB connection
+// MySqlDB Get MySQL DB connection
 // URI string
 // Ex: user:password@/db_name?charset=utf8&parseTime=True&loc=Local
-func MysqlDB(uri string) (db *gorm.DB, err error) {
-	return gorm.Open("mysql", uri)
+func MySqlDB(uri string) (db *gorm.DB, err error) {
+	return gorm.Open(mysql.Open(uri), &gorm.Config{})
 }

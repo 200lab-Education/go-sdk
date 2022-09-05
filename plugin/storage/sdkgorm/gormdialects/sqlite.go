@@ -1,13 +1,13 @@
 package gormdialects
 
 import (
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
-// Get SQLite DB connection
+// SQLiteDB Get SQLite DB connection
 // URI string
 // Ex: /tmp/gorm.db
 func SQLiteDB(uri string) (db *gorm.DB, err error) {
-	return gorm.Open("sqlite3", uri)
+	return gorm.Open(sqlite.Open(uri))
 }

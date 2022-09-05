@@ -11,12 +11,9 @@ import (
 	"flag"
 	"github.com/200Lab-Education/go-sdk/logger"
 	"github.com/200Lab-Education/go-sdk/plugin/storage/sdkgorm/gormdialects"
-	"github.com/jinzhu/gorm"
-	"github.com/sirupsen/logrus"
-	"math"
+	"gorm.io/gorm"
 	"strings"
 	"sync"
-	"time"
 )
 
 type GormDBType int
@@ -96,13 +93,12 @@ func (gdb *gormDB) Configure() error {
 	gdb.logger.Info("Connect to Gorm DB at ", gdb.Uri, " ...")
 
 	var err error
-	gdb.db, err = gdb.getConnWithRetry(dbType, retryCount)
+	gdb.db, err = gdb.getDBConn(dbType)
 	if err != nil {
 		gdb.logger.Error("Error connect to gorm database at ", gdb.Uri, ". ", err.Error())
 		return err
 	}
 	gdb.isRunning = true
-	//gdb.db.SetLogger(gdb.logger)
 
 	return nil
 }
@@ -112,37 +108,21 @@ func (gdb *gormDB) Run() error {
 }
 
 func (gdb *gormDB) Stop() <-chan bool {
-	if gdb.db != nil {
-		_ = gdb.db.Close()
-	}
 	gdb.isRunning = false
 
 	c := make(chan bool)
-	go func() { c <- true }()
+	go func() {
+		c <- true
+		gdb.logger.Infoln("Stopped")
+	}()
 	return c
 }
 
 func (gdb *gormDB) Get() interface{} {
-	gdb.once.Do(func() {
-		if !gdb.isRunning && !gdb.isDisabled() {
-			if db, err := gdb.getConnWithRetry(getDBType(gdb.DBType), math.MaxInt32); err == nil {
-				gdb.db = db
-				gdb.isRunning = true
-				//gdb.db.SetLogger(gdb.logger)
-			} else {
-				gdb.logger.Fatalf("%s connection cannot reconnect\n", gdb.name, err)
-			}
-		}
-	})
-
-	if gdb.db == nil {
-		return nil
+	if gdb.logger.GetLevel() == "debug" || gdb.logger.GetLevel() == "trace" {
+		return gdb.db.Session(&gorm.Session{NewDB: true}).Debug()
 	}
-
-	lv, _ := logrus.ParseLevel(gdb.logger.GetLevel())
-	gdb.db.LogMode(lv >= logrus.DebugLevel)
-
-	return gdb.db.New()
+	return gdb.db.Session(&gorm.Session{NewDB: true})
 }
 
 func getDBType(dbType string) GormDBType {
@@ -163,51 +143,14 @@ func getDBType(dbType string) GormDBType {
 func (gdb *gormDB) getDBConn(t GormDBType) (dbConn *gorm.DB, err error) {
 	switch t {
 	case GormDBTypeMySQL:
-		return gormdialects.MysqlDB(gdb.Uri)
+		return gormdialects.MySqlDB(gdb.Uri)
 	case GormDBTypePostgres:
 		return gormdialects.PostgresDB(gdb.Uri)
 	case GormDBTypeSQLite:
 		return gormdialects.SQLiteDB(gdb.Uri)
 	case GormDBTypeMSSQL:
-		return gormdialects.MSSQLDB(gdb.Uri)
+		return gormdialects.MSSqlDB(gdb.Uri)
 	}
 
 	return nil, nil
-}
-
-func (gdb *gormDB) getConnWithRetry(dbType GormDBType, retryCount int) (dbConn *gorm.DB, err error) {
-	db, err := gdb.getDBConn(dbType)
-
-	if err != nil {
-		for {
-			time.Sleep(time.Second * 1)
-			gdb.logger.Errorf("Retry to connect %s.\n", gdb.name)
-			db, err = gdb.getDBConn(dbType)
-
-			if err == nil {
-				go gdb.reconnectIfNeeded()
-				break
-			}
-		}
-	} else {
-		// auto reconnect
-		go gdb.reconnectIfNeeded()
-	}
-
-	return db, err
-}
-
-func (gdb *gormDB) reconnectIfNeeded() {
-	conn := gdb.db
-	for {
-		if err := conn.DB().Ping(); err != nil {
-			_ = conn.Close()
-			gdb.logger.Errorf("%s connection is gone, try to reconnect\n", gdb.name)
-			gdb.isRunning = false
-			gdb.once = new(sync.Once)
-			_ = gdb.Get()
-			return
-		}
-		time.Sleep(time.Second * time.Duration(gdb.PingInterval))
-	}
 }
