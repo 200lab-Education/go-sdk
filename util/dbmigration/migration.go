@@ -9,7 +9,7 @@ package dbmigration
 import (
 	"fmt"
 	"github.com/200Lab-Education/go-sdk/logger"
-	"github.com/jinzhu/gorm"
+	"gorm.io/gorm"
 	"io/ioutil"
 	"log"
 	"path/filepath"
@@ -57,7 +57,7 @@ func (sql *sqlMigration) actualVersion() int {
 		Value string `gorm:"value"`
 	}
 
-	if err := sql.db.New().Table(sql.getTableName()).
+	if err := sql.db.Table(sql.getTableName()).
 		Where("name = ?", "DB_VERSION").First(&data).Error; err != nil {
 		return 0
 	}
@@ -132,15 +132,15 @@ func (sql *sqlMigration) Migrate() error {
 					continue
 				}
 
-				db := sql.db.New()
+				db := sql.db
 				if err := db.Exec(command).Error; err != nil {
 					sql.logger.Fatalln(err)
 				}
 			}
 
-			if err := sql.db.New().Table(sql.getTableName()).
+			if err := sql.db.Table(sql.getTableName()).
 				Where("name = ?", "DB_VERSION").
-				Update(map[string]interface{}{"value": v}).Error; err != nil {
+				Updates(map[string]interface{}{"value": v}).Error; err != nil {
 				sql.logger.Fatalln(err)
 			}
 		}
